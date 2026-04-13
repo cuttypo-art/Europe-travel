@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/pdf-chatbot/"
+title = "PDF Chatbot"
+version = "1.0.0"
+id = "artifacts/pdf-chatbot"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/pdf-chatbot/" ]
+localPort = 19343
+
+[services.development]
+run = "pnpm --filter @workspace/pdf-chatbot run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/pdf-chatbot", "run", "build" ]
+publicDir = "artifacts/pdf-chatbot/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19343"
+BASE_PATH = "/pdf-chatbot/"

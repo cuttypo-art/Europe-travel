@@ -1,22 +1,22 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: PDF Chatbot API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: pdf
+    description: PDF upload and chat operations
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +24,70 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /pdf/upload:
+    post:
+      operationId: uploadPdf
+      tags: [pdf]
+      summary: Upload a PDF file and index it
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: PDF uploaded and indexed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadResult"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /pdf/chat:
+    post:
+      operationId: chatWithPdf
+      tags: [pdf]
+      summary: Ask a question about the uploaded PDF
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatRequest"
+      responses:
+        "200":
+          description: Answer generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /pdf/status:
+    get:
+      operationId: getPdfStatus
+      tags: [pdf]
+      summary: Get current PDF index status
+      responses:
+        "200":
+          description: Status of indexed PDF
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PdfStatus"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +97,71 @@ components:
           type: string
       required:
         - status
-
+    UploadResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        filename:
+          type: string
+        chunkCount:
+          type: integer
+        message:
+          type: string
+      required:
+        - success
+        - filename
+        - chunkCount
+        - message
+    ChatRequest:
+      type: object
+      properties:
+        question:
+          type: string
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+      required:
+        - question
+    ChatMessage:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+      required:
+        - role
+        - content
+    ChatResponse:
+      type: object
+      properties:
+        answer:
+          type: string
+        sources:
+          type: array
+          items:
+            type: string
+      required:
+        - answer
+        - sources
+    PdfStatus:
+      type: object
+      properties:
+        indexed:
+          type: boolean
+        filename:
+          type: string
+        chunkCount:
+          type: integer
+      required:
+        - indexed
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
