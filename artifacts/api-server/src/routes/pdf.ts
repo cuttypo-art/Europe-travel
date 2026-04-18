@@ -36,37 +36,50 @@ interface WebResult {
   content: string;
 }
 
-let vectorStore: VectorStore | null = null;
+const vectorStores: { travel: VectorStore | null; googlemap: VectorStore | null } = {
+  travel: null,
+  googlemap: null,
+};
 
-// ── 서버 시작 시 data/travel.pdf 자동 로딩 ───────────────────────────────────
+// ── 서버 시작 시 PDF 자동 로딩 ───────────────────────────────────────────────
 export async function autoLoadTravelPdf() {
   const dataDir = path.resolve(process.cwd(), "data");
-  const pdfPath = path.join(dataDir, "travel.pdf");
 
-  if (!fs.existsSync(pdfPath)) {
-    console.log("[travel-pdf] data/travel.pdf 없음 — 파일을 넣으면 자동 로딩됩니다.");
-    return;
+  // travel.pdf
+  const travelPath = path.join(dataDir, "travel.pdf");
+  if (fs.existsSync(travelPath)) {
+    try {
+      console.log("[pdf] travel.pdf 로딩 중...");
+      const buf = fs.readFileSync(travelPath);
+      vectorStores.travel = await buildVectorStore(buf, "travel.pdf");
+      console.log(`[pdf] travel.pdf 완료: ${vectorStores.travel.chunks.length}청크`);
+    } catch (err: any) {
+      console.error("[pdf] travel.pdf 실패:", err.message);
+    }
   }
 
-  try {
-    console.log("[travel-pdf] data/travel.pdf 로딩 중...");
-    const buffer = fs.readFileSync(pdfPath);
-    await indexPdfBuffer(buffer, "travel.pdf");
-    console.log(`[travel-pdf] 로딩 완료: ${vectorStore?.chunks.length}개 청크`);
-  } catch (err: any) {
-    console.error("[travel-pdf] 로딩 실패:", err.message);
+  // googlemap.pdf
+  const gmapPath = path.join(dataDir, "googlemap.pdf");
+  if (fs.existsSync(gmapPath)) {
+    try {
+      console.log("[pdf] googlemap.pdf 로딩 중...");
+      const buf = fs.readFileSync(gmapPath);
+      vectorStores.googlemap = await buildVectorStore(buf, "googlemap.pdf");
+      console.log(`[pdf] googlemap.pdf 완료: ${vectorStores.googlemap.chunks.length}청크`);
+    } catch (err: any) {
+      console.error("[pdf] googlemap.pdf 실패:", err.message);
+    }
   }
 }
 
-// ── 공통 PDF 인덱싱 함수 ─────────────────────────────────────────────────────
-async function indexPdfBuffer(buffer: Buffer, filename: string) {
+// ── PDF → VectorStore 빌드 ───────────────────────────────────────────────────
+async function buildVectorStore(buffer: Buffer, filename: string): Promise<VectorStore> {
   const pdfData = await pdfParse(buffer);
   const text = pdfData.text.replace(/\s+/g, " ").trim();
   if (text.length < 50) throw new Error("PDF에서 텍스트를 읽을 수 없습니다.");
 
   const rawChunks = splitIntoChunks(text);
   const chunks: Chunk[] = [];
-
   const batchSize = 20;
   for (let i = 0; i < rawChunks.length; i += batchSize) {
     const batch = rawChunks.slice(i, i + batchSize);
@@ -78,8 +91,12 @@ async function indexPdfBuffer(buffer: Buffer, filename: string) {
       chunks.push({ text: batch[j], embedding: embRes.data[j].embedding });
     }
   }
+  return { filename, chunks };
+}
 
-  vectorStore = { filename, chunks };
+// ── 관리자 업로드용 (travel.pdf 교체) ────────────────────────────────────────
+async function indexPdfBuffer(buffer: Buffer, filename: string) {
+  vectorStores.travel = await buildVectorStore(buffer, filename);
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -147,42 +164,36 @@ async function tavilySearch(query: string): Promise<WebResult[]> {
   }
 }
 
-// ── 채팅 (PDF RAG + Tavily 항상 동시 실행) ───────────────────────────────────
-router.post("/chat", async (req: Request, res: Response) => {
-  const { question, history = [] } = req.body;
+// ── 구글맵 관련 질문 감지 ────────────────────────────────────────────────────
+function isGoogleMapQuestion(q: string): boolean {
+  return /구글\s*맵|구글\s*지도|google\s*map|길찾기|내비|나침반|스트리트뷰|위성\s*지도|장소\s*검색|즐겨찾기\s*저장|오프라인\s*지도/i.test(q);
+}
 
-  if (!question || typeof question !== "string") {
-    res.status(400).json({ error: "Question is required" });
-    return;
+// ── 두 VectorStore 통합 RAG 검색 ─────────────────────────────────────────────
+async function searchAllStores(question: string, queryEmbedding: number[]): Promise<{ context: string; sources: string[] }> {
+  const results: Array<{ text: string; score: number; label: string }> = [];
+
+  if (vectorStores.travel) {
+    vectorStores.travel.chunks.forEach(chunk => {
+      results.push({ text: chunk.text, score: cosineSimilarity(queryEmbedding, chunk.embedding), label: "여행기" });
+    });
+  }
+  if (vectorStores.googlemap) {
+    vectorStores.googlemap.chunks.forEach(chunk => {
+      results.push({ text: chunk.text, score: cosineSimilarity(queryEmbedding, chunk.embedding), label: "구글맵 가이드" });
+    });
   }
 
-  try {
-    // PDF RAG와 Tavily 검색 병렬 실행
-    const [webResults, pdfResult] = await Promise.all([
-      tavilySearch(question),
-      (async () => {
-        if (!vectorStore) return { context: "", sources: [] };
-        const queryEmbedding = await getEmbedding(question);
-        const scored = vectorStore.chunks
-          .map(chunk => ({ chunk, score: cosineSimilarity(queryEmbedding, chunk.embedding) }))
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 5);
-        const context = scored.map((s, i) => `[여행기 ${i + 1}] ${s.chunk.text}`).join("\n\n");
-        const sources = scored.slice(0, 3).map(s =>
-          s.chunk.text.slice(0, 200) + (s.chunk.text.length > 200 ? "..." : "")
-        );
-        return { context, sources };
-      })(),
-    ]);
+  const top = results.sort((a, b) => b.score - a.score).slice(0, 6);
+  const context = top.map((r, i) => `[${r.label} ${i + 1}] ${r.text}`).join("\n\n");
+  const sources = top.slice(0, 3).map(r => r.text.slice(0, 200) + (r.text.length > 200 ? "..." : ""));
+  return { context, sources };
+}
 
-    const { context: pdfContext, sources } = pdfResult;
-
-    const webContext = webResults.length > 0
-      ? webResults.map((r, i) => `[웹 ${i + 1}] ${r.title}\n${r.content}\n출처: ${r.url}`).join("\n\n")
-      : "";
-
-    let systemPrompt = `당신은 친절하고 유용한 동유럽 여행 전문 챗봇입니다.
-여행자의 질문에 자세하고 실용적으로 답해주세요. 질문과 같은 언어로 답변하세요 (한국어 질문 → 한국어 답변).
+// ── 시스템 프롬프트 생성 ─────────────────────────────────────────────────────
+function buildSystemPrompt(pdfContext: string, webContext: string, isGmapQ: boolean): string {
+  let prompt = `당신은 친절하고 유용한 동유럽 여행 및 구글맵 사용법 전문 챗봇입니다.
+질문에 자세하고 실용적으로 답해주세요. 질문과 같은 언어로 답변하세요 (한국어 질문 → 한국어 답변).
 
 ## 관련 사이트 안내 지침
 답변 내용에 따라 아래 사이트를 자연스럽게 언급하고, URL을 그대로 포함해 주세요 (마크다운 없이 URL 그대로):
@@ -200,15 +211,52 @@ router.post("/chat", async (req: Request, res: Response) => {
 
 관련 사이트가 있을 때만 언급하세요. URL은 마크다운 형식([텍스트](url)) 없이 평문 URL로 작성하세요.`;
 
-    if (pdfContext) {
-      systemPrompt += `\n\n## 여행기 (저자의 직접 경험)\n${pdfContext}`;
-    }
-    if (webContext) {
-      systemPrompt += `\n\n## 최신 인터넷 정보\n${webContext}`;
-    }
-    if (pdfContext || webContext) {
-      systemPrompt += `\n\n위 정보를 종합하여 답변하세요. 여행기의 개인 경험과 최신 웹 정보를 구분해서 설명하면 더 좋습니다.`;
-    }
+  if (isGmapQ) {
+    prompt += `\n\n## 구글맵 관련 질문 지침
+구글맵 사용법을 물어보는 경우, 아래 유튜브 영상을 반드시 참고 자료로 언급해 주세요:
+- 추천 영상: https://youtu.be/oZ57SmPTh9s
+또한, 최신 구글맵 관련 유튜브 영상이 웹 검색 결과에 있으면 함께 안내해 주세요.
+단계별로 쉽게 설명하고, 해외 여행자에게 특히 유용한 기능을 강조하세요.`;
+  }
+
+  if (pdfContext) {
+    prompt += `\n\n## 참고 자료 (여행기 & 구글맵 가이드)\n${pdfContext}`;
+  }
+  if (webContext) {
+    prompt += `\n\n## 최신 인터넷 정보\n${webContext}`;
+  }
+  if (pdfContext || webContext) {
+    prompt += `\n\n위 정보를 종합하여 답변하세요. 출처(여행기 경험 / 구글맵 가이드 / 웹 정보)를 구분해서 설명하면 더 좋습니다.`;
+  }
+
+  return prompt;
+}
+
+// ── 채팅 (PDF RAG + Tavily 항상 동시 실행) ───────────────────────────────────
+router.post("/chat", async (req: Request, res: Response) => {
+  const { question, history = [] } = req.body;
+
+  if (!question || typeof question !== "string") {
+    res.status(400).json({ error: "Question is required" });
+    return;
+  }
+
+  try {
+    const isGmapQ = isGoogleMapQuestion(question);
+    const tavilyQuery = isGmapQ ? `구글맵 사용법 유튜브 ${question}` : question;
+
+    const [webResults, queryEmbedding] = await Promise.all([
+      tavilySearch(tavilyQuery),
+      getEmbedding(question),
+    ]);
+
+    const { context: pdfContext, sources } = await searchAllStores(question, queryEmbedding);
+
+    const webContext = webResults.length > 0
+      ? webResults.map((r, i) => `[웹 ${i + 1}] ${r.title}\n${r.content}\n출처: ${r.url}`).join("\n\n")
+      : "";
+
+    const systemPrompt = buildSystemPrompt(pdfContext, webContext, isGmapQ);
 
     const messages: OpenAI.ChatCompletionMessageParam[] = [
       { role: "system", content: systemPrompt },
@@ -251,24 +299,16 @@ router.post("/chat/stream", async (req: Request, res: Response) => {
   };
 
   try {
-    const [webResults, pdfResult] = await Promise.all([
-      tavilySearch(question),
-      (async () => {
-        if (!vectorStore) return { context: "", sources: [] as string[] };
-        const queryEmbedding = await getEmbedding(question);
-        const scored = vectorStore.chunks
-          .map(chunk => ({ chunk, score: cosineSimilarity(queryEmbedding, chunk.embedding) }))
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 5);
-        const context = scored.map((s, i) => `[여행기 ${i + 1}] ${s.chunk.text}`).join("\n\n");
-        const sources = scored.slice(0, 3).map(s =>
-          s.chunk.text.slice(0, 200) + (s.chunk.text.length > 200 ? "..." : "")
-        );
-        return { context, sources };
-      })(),
+    const isGmapQ = isGoogleMapQuestion(question);
+    const tavilyQuery = isGmapQ ? `구글맵 사용법 유튜브 ${question}` : question;
+
+    const [webResults, queryEmbedding] = await Promise.all([
+      tavilySearch(tavilyQuery),
+      getEmbedding(question),
     ]);
 
-    const { context: pdfContext, sources } = pdfResult;
+    const { context: pdfContext, sources } = await searchAllStores(question, queryEmbedding);
+
     const webContext = webResults.length > 0
       ? webResults.map((r, i) => `[웹 ${i + 1}] ${r.title}\n${r.content}\n출처: ${r.url}`).join("\n\n")
       : "";
@@ -276,28 +316,7 @@ router.post("/chat/stream", async (req: Request, res: Response) => {
     // 소스 먼저 전송
     send("sources", { sources, webResults });
 
-    let systemPrompt = `당신은 친절하고 유용한 동유럽 여행 전문 챗봇입니다.
-여행자의 질문에 자세하고 실용적으로 답해주세요. 질문과 같은 언어로 답변하세요 (한국어 질문 → 한국어 답변).
-
-## 관련 사이트 안내 지침
-답변 내용에 따라 아래 사이트를 자연스럽게 언급하고, URL을 그대로 포함해 주세요 (마크다운 없이 URL 그대로):
-
-- 투어·액티비티 예약: GetYourGuide (https://www.getyourguide.com)
-- 체코·슬로바키아 셔틀버스: CK Shuttle (https://www.ckshuttle.cz)
-- 동유럽 버스: FlixBus (https://www.flixbus.com), RegioJet (https://www.regiojet.com)
-- 기차·교통 통합 검색: Omio (https://www.omio.com), Trainline (https://www.thetrainline.com)
-- 숙소 예약: Booking.com (https://www.booking.com), Hostelworld (https://www.hostelworld.com)
-- 빈·잘츠부르크 교통: ÖBB (https://www.oebb.at)
-- 체코 철도: České dráhy (https://www.cd.cz)
-- 헝가리 철도: MÁV (https://www.mavcsoport.hu)
-- 할슈타트 관련: 잘츠카머구트 공식 (https://www.hallstatt.net)
-- 크리스마스 마켓 정보: Austria Tourism (https://www.austria.info)
-
-관련 사이트가 있을 때만 언급하세요. URL은 마크다운 형식([텍스트](url)) 없이 평문 URL로 작성하세요.`;
-
-    if (pdfContext) systemPrompt += `\n\n## 여행기 (저자의 직접 경험)\n${pdfContext}`;
-    if (webContext) systemPrompt += `\n\n## 최신 인터넷 정보\n${webContext}`;
-    if (pdfContext || webContext) systemPrompt += `\n\n위 정보를 종합하여 답변하세요. 여행기의 개인 경험과 최신 웹 정보를 구분해서 설명하면 더 좋습니다.`;
+    const systemPrompt = buildSystemPrompt(pdfContext, webContext, isGmapQ);
 
     const messages: OpenAI.ChatCompletionMessageParam[] = [
       { role: "system", content: systemPrompt },
@@ -330,15 +349,12 @@ router.post("/chat/stream", async (req: Request, res: Response) => {
 
 // ── 상태 조회 ─────────────────────────────────────────────────────────────────
 router.get("/status", (_req: Request, res: Response) => {
-  if (!vectorStore) {
-    res.json({ indexed: false });
-  } else {
-    res.json({
-      indexed: true,
-      filename: vectorStore.filename,
-      chunkCount: vectorStore.chunks.length,
-    });
-  }
+  const indexed = !!(vectorStores.travel || vectorStores.googlemap);
+  res.json({
+    indexed,
+    travel: vectorStores.travel ? { filename: vectorStores.travel.filename, chunkCount: vectorStores.travel.chunks.length } : null,
+    googlemap: vectorStores.googlemap ? { filename: vectorStores.googlemap.filename, chunkCount: vectorStores.googlemap.chunks.length } : null,
+  });
 });
 
 // ── 관리자용: PDF 교체 업로드 (숨겨진 엔드포인트) ─────────────────────────────
