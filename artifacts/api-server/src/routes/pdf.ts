@@ -14,6 +14,10 @@ function getOpenAI(): OpenAI {
   return new OpenAI({ apiKey: key });
 }
 
+function getTavilyKey(): string {
+  return process.env.TAVILY_API_KEY ?? "";
+}
+
 interface Chunk {
   text: string;
   embedding: number[];
@@ -22,6 +26,12 @@ interface Chunk {
 interface VectorStore {
   filename: string;
   chunks: Chunk[];
+}
+
+interface WebResult {
+  title: string;
+  url: string;
+  content: string;
 }
 
 let vectorStore: VectorStore | null = null;
@@ -60,6 +70,40 @@ async function getEmbedding(text: string): Promise<number[]> {
     input: text.slice(0, 8000),
   });
   return res.data[0].embedding;
+}
+
+async function tavilySearch(query: string): Promise<WebResult[]> {
+  const apiKey = getTavilyKey();
+  if (!apiKey) return [];
+
+  try {
+    const response = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: apiKey,
+        query,
+        search_depth: "basic",
+        max_results: 5,
+        include_answer: false,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("Tavily search failed:", response.status, await response.text());
+      return [];
+    }
+
+    const data: any = await response.json();
+    return (data.results ?? []).map((r: any) => ({
+      title: r.title ?? "",
+      url: r.url ?? "",
+      content: (r.content ?? "").slice(0, 600),
+    }));
+  } catch (err) {
+    console.error("Tavily search error:", err);
+    return [];
+  }
 }
 
 router.post("/upload", upload.single("file"), async (req: Request, res: Response) => {
@@ -116,38 +160,62 @@ router.post("/upload", upload.single("file"), async (req: Request, res: Response
 });
 
 router.post("/chat", async (req: Request, res: Response) => {
-  const { question, history = [] } = req.body;
+  const { question, history = [], webSearch = false } = req.body;
 
   if (!question || typeof question !== "string") {
     res.status(400).json({ error: "Question is required" });
     return;
   }
-  if (!vectorStore) {
-    res.status(400).json({ error: "No PDF indexed. Please upload a PDF first." });
-    return;
-  }
 
   try {
-    const queryEmbedding = await getEmbedding(question);
+    // --- PDF RAG (if indexed) ---
+    let pdfContext = "";
+    const sources: string[] = [];
 
-    const scored = vectorStore.chunks
-      .map(chunk => ({ chunk, score: cosineSimilarity(queryEmbedding, chunk.embedding) }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 5);
+    if (vectorStore) {
+      const queryEmbedding = await getEmbedding(question);
+      const scored = vectorStore.chunks
+        .map(chunk => ({ chunk, score: cosineSimilarity(queryEmbedding, chunk.embedding) }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5);
 
-    const context = scored.map((s, i) => `[${i + 1}] ${s.chunk.text}`).join("\n\n");
-    const sources = scored.slice(0, 3).map(s => s.chunk.text.slice(0, 200) + (s.chunk.text.length > 200 ? "..." : ""));
+      pdfContext = scored.map((s, i) => `[여행기 ${i + 1}] ${s.chunk.text}`).join("\n\n");
+      scored.slice(0, 3).forEach(s =>
+        sources.push(s.chunk.text.slice(0, 200) + (s.chunk.text.length > 200 ? "..." : ""))
+      );
+    }
+
+    // --- Tavily Web Search (if requested) ---
+    let webResults: WebResult[] = [];
+    let webContext = "";
+
+    if (webSearch) {
+      webResults = await tavilySearch(question);
+      if (webResults.length > 0) {
+        webContext = webResults
+          .map((r, i) => `[웹 ${i + 1}] ${r.title}\n${r.content}\n출처: ${r.url}`)
+          .join("\n\n");
+      }
+    }
+
+    // --- Build system prompt ---
+    let systemPrompt = `당신은 친절하고 유용한 여행 챗봇입니다. 동유럽 여행 전문가로서 여행자의 질문에 자세하게 답해주세요.
+질문과 같은 언어로 답변하세요 (한국어 질문 → 한국어 답변).`;
+
+    if (pdfContext) {
+      systemPrompt += `\n\n## 여행기 (개인 경험)\n${pdfContext}`;
+    }
+    if (webContext) {
+      systemPrompt += `\n\n## 최신 인터넷 정보\n${webContext}`;
+    }
+    if (!pdfContext && !webContext) {
+      systemPrompt += `\n\n현재 참고할 문서나 웹 정보가 없습니다. 일반 여행 지식을 바탕으로 답변해주세요.`;
+    } else {
+      systemPrompt += `\n\n위 정보를 종합하여 답변하되, 여행기의 개인 경험과 최신 웹 정보를 구분하여 설명해주세요.`;
+    }
 
     const messages: OpenAI.ChatCompletionMessageParam[] = [
-      {
-        role: "system",
-        content: `You are a helpful assistant that answers questions based on the provided document context. 
-Answer in the same language as the question. Be concise and accurate. 
-If the answer is not found in the context, say so clearly.
-
-Document context:
-${context}`,
-      },
+      { role: "system", content: systemPrompt },
       ...history.map((m: { role: string; content: string }) => ({
         role: m.role as "user" | "assistant",
         content: m.content,
@@ -158,11 +226,11 @@ ${context}`,
     const completion = await getOpenAI().chat.completions.create({
       model: "gpt-4o-mini",
       messages,
-      temperature: 0.1,
+      temperature: 0.3,
     });
 
     const answer = completion.choices[0].message.content ?? "";
-    res.json({ answer, sources });
+    res.json({ answer, sources, webResults });
   } catch (err: any) {
     res.status(500).json({ error: `Failed to generate answer: ${err.message}` });
   }
