@@ -50,6 +50,19 @@ const SUGGESTIONS = [
 ];
 const GMAP_CHIP = "📍 구글맵 사용법 알려줘";
 
+const GMAP_FOLLOWUPS = [
+  "구글맵 설치하는 법 알려줘",
+  "구글맵으로 길찾기 하는 법은?",
+  "내 주변 맛집 찾는 법 알려줘",
+  "한식당 검색하는 방법은?",
+  "리뷰 보는 법 알려줘",
+  "구글맵으로 맛집 예약할 수 있어?",
+  "라이브뷰(AR) 기능이 뭐야?",
+  "즐겨찾기에 장소 저장하는 법은?",
+  "위성 지도로 바꾸는 법 알려줘",
+  "현재 위치 공유하는 법은?",
+];
+
 export function ChatInterface() {
   const { data: status } = useGetPdfStatus();
   const chatMutation = useChatWithPdf();
@@ -112,7 +125,9 @@ export function ChatInterface() {
         {messages.length === 0 ? (
           <WelcomeScreen hasPdf={!!status?.indexed} onSuggest={q => { setInput(q); sendMessage(q); }} />
         ) : (
-          messages.map((msg, idx) => <MessageBubble key={idx} msg={msg} />)
+          messages.map((msg, idx) => (
+            <MessageBubble key={idx} msg={msg} onSuggest={q => { setInput(q); sendMessage(q); }} />
+          ))
         )}
         {chatMutation.isPending && <TypingIndicator />}
         <div ref={messagesEndRef} />
@@ -247,15 +262,14 @@ function WelcomeScreen({ onSuggest }: { hasPdf: boolean; onSuggest: (q: string) 
       {/* 구글맵 강조 버튼 */}
       <button
         onClick={() => onSuggest(GMAP_CHIP)}
-        className="w-full max-w-xl mb-3 text-center font-bold px-5 py-4 rounded-2xl transition-all duration-200 ease-out text-base"
+        className="w-full max-w-xl mb-3 text-center font-bold px-5 py-4 rounded-2xl transition-all duration-200 ease-out text-base text-white"
         style={{
-          background: "#fefce8",
-          border: "2px solid #fde047",
-          boxShadow: "0 4px 14px rgba(250,204,21,0.25)",
-          color: "#713f12",
+          background: "linear-gradient(135deg, #2563eb, #4f46e5)",
+          border: "none",
+          boxShadow: "0 6px 18px rgba(59,130,246,0.35)",
         }}
-        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 22px rgba(250,204,21,0.4)"; }}
-        onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 4px 14px rgba(250,204,21,0.25)"; }}
+        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 10px 26px rgba(59,130,246,0.45)"; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 6px 18px rgba(59,130,246,0.35)"; }}
       >
         {GMAP_CHIP}
       </button>
@@ -306,8 +320,9 @@ function SuggestionChip({ label, onClick }: { label: string; onClick: () => void
 }
 
 /* ── 메시지 버블 ─────────────────────────────────────────────────────── */
-function MessageBubble({ msg }: { msg: ChatMessage }) {
+function MessageBubble({ msg, onSuggest }: { msg: ChatMessage; onSuggest: (q: string) => void }) {
   const isUser = msg.role === "user";
+  const isGmap = !isUser && msg.images && msg.images.length > 0;
   return (
     <div className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
       {!isUser && (
@@ -356,6 +371,38 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
                   className="w-full rounded-xl border border-gray-100 shadow-sm"
                   style={{ maxWidth: 480 }}
                 />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {isGmap && (
+          <div className="mt-4 ml-1">
+            <p className="text-[12px] font-semibold text-blue-600 mb-2">
+              🗺️ 구글맵 관련 질문을 더 해보세요
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {GMAP_FOLLOWUPS.map(q => (
+                <button
+                  key={q}
+                  onClick={() => onSuggest(q)}
+                  className="text-left text-[12px] font-medium px-3 py-2 rounded-xl transition-all duration-150"
+                  style={{
+                    background: "#eff6ff",
+                    color: "#1d4ed8",
+                    border: "1px solid #bfdbfe",
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = "#dbeafe";
+                    e.currentTarget.style.borderColor = "#93c5fd";
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = "#eff6ff";
+                    e.currentTarget.style.borderColor = "#bfdbfe";
+                  }}
+                >
+                  {q}
+                </button>
               ))}
             </div>
           </div>
