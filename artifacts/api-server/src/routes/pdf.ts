@@ -6,7 +6,7 @@ const pdfParse: (buffer: Buffer) => Promise<{ text: string; numpages: number }> 
   (globalThis as any).require("pdf-parse");
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
 
 function getOpenAI(): OpenAI {
   let key = process.env.OPENAI_API_KEY ?? "";
@@ -106,7 +106,21 @@ async function tavilySearch(query: string): Promise<WebResult[]> {
   }
 }
 
-router.post("/upload", upload.single("file"), async (req: Request, res: Response) => {
+router.post("/upload", (req: Request, res: Response) => {
+  upload.single("file")(req, res, async (err: any) => {
+    if (err) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        res.status(400).json({ error: "파일 크기가 너무 큽니다. 최대 200MB까지 업로드 가능합니다." });
+      } else {
+        res.status(400).json({ error: `업로드 오류: ${err.message}` });
+      }
+      return;
+    }
+    await handleUpload(req, res);
+  });
+});
+
+async function handleUpload(req: Request, res: Response) {
   if (!req.file) {
     res.status(400).json({ error: "No file provided" });
     return;
@@ -157,7 +171,7 @@ router.post("/upload", upload.single("file"), async (req: Request, res: Response
   } catch (err: any) {
     res.status(500).json({ error: `Failed to process PDF: ${err.message}` });
   }
-});
+}
 
 router.post("/chat", async (req: Request, res: Response) => {
   const { question, history = [], webSearch = false } = req.body;
