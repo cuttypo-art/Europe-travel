@@ -56,7 +56,9 @@ export function ChatInterface() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messages.length > 0) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages]);
 
   const sendMessage = async (text: string) => {
@@ -153,29 +155,145 @@ export function ChatInterface() {
   );
 }
 
-/* ── Welcome / Hero 섹션 ─────────────────────────────────────────────── */
-function WelcomeScreen({ hasPdf, onSuggest }: { hasPdf: boolean; onSuggest: (q: string) => void }) {
+/* ── SVG 아이콘 세트 (단색 라인 아트) ─────────────────────────────────── */
+const ICON_COLOR = "#3b82f6";
+const ICON_PROPS = { width: 36, height: 36, viewBox: "0 0 24 24", fill: "none", stroke: ICON_COLOR, strokeWidth: 1.4, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+
+function IconSkyline() {
   return (
-    <div className="flex flex-col items-center justify-center py-6 text-center space-y-7">
-      {/* 동유럽 감성 일러스트 이모지 */}
-      <div className="space-y-1">
-        <div className="text-5xl leading-tight select-none">🏰🌉✈️</div>
-        <div className="text-3xl leading-tight select-none">🥐☕🗺️</div>
+    <svg {...ICON_PROPS}>
+      <rect x="2" y="13" width="4" height="8" rx="0.5" />
+      <rect x="7" y="9" width="4" height="12" rx="0.5" />
+      <rect x="12" y="5" width="5" height="16" rx="0.5" />
+      <rect x="18" y="10" width="4" height="11" rx="0.5" />
+      <line x1="12" y1="5" x2="14" y2="2" />
+      <line x1="13" y1="2" x2="15" y2="2" />
+      <line x1="1" y1="21" x2="23" y2="21" />
+    </svg>
+  );
+}
+function IconPlane() {
+  return (
+    <svg {...ICON_PROPS}>
+      <path d="M22 2L11 13" />
+      <path d="M22 2L15 22L11 13L2 9L22 2Z" />
+    </svg>
+  );
+}
+function IconMap() {
+  return (
+    <svg {...ICON_PROPS}>
+      <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" />
+      <line x1="8" y1="2" x2="8" y2="18" />
+      <line x1="16" y1="6" x2="16" y2="22" />
+    </svg>
+  );
+}
+function IconCoffee() {
+  return (
+    <svg {...ICON_PROPS}>
+      <path d="M18 8h1a4 4 0 0 1 0 8h-1" />
+      <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" />
+      <line x1="6" y1="1" x2="6" y2="4" />
+      <line x1="10" y1="1" x2="10" y2="4" />
+      <line x1="14" y1="1" x2="14" y2="4" />
+    </svg>
+  );
+}
+function IconCastle() {
+  return (
+    <svg {...ICON_PROPS}>
+      <line x1="3" y1="6" x2="3" y2="3" />
+      <line x1="7" y1="6" x2="7" y2="3" />
+      <line x1="3" y1="3" x2="7" y2="3" />
+      <line x1="13" y1="6" x2="13" y2="3" />
+      <line x1="17" y1="6" x2="17" y2="3" />
+      <line x1="13" y1="3" x2="17" y2="3" />
+      <rect x="2" y="6" width="7" height="15" rx="0.5" />
+      <rect x="12" y="6" width="7" height="15" rx="0.5" />
+      <rect x="8" y="11" width="7" height="10" rx="0.5" />
+      <line x1="1" y1="21" x2="23" y2="21" />
+    </svg>
+  );
+}
+
+/* ── Welcome / Hero 섹션 ─────────────────────────────────────────────── */
+const BOOK_URL = "https://ebook-product.kyobobook.co.kr/dig/epd/ebook/E000012350958";
+
+function WelcomeScreen({ onSuggest }: { hasPdf: boolean; onSuggest: (q: string) => void }) {
+  return (
+    <div className="flex flex-col items-center justify-start pt-4 pb-2 text-center">
+
+      {/* 1. SVG 라인아트 아이콘 세트 */}
+      <div className="flex items-end justify-center gap-7 mb-4">
+        <div className="opacity-50"><IconCastle /></div>
+        <div className="opacity-70"><IconMap /></div>
+        <div className="opacity-100"><IconPlane /></div>
+        <div className="opacity-70"><IconCoffee /></div>
+        <div className="opacity-50"><IconSkyline /></div>
       </div>
 
-      {/* 타이틀 */}
-      <div>
-        <h2 className="text-3xl font-extrabold tracking-tight text-gray-800 leading-tight">
+      {/* 2. 책 표지 이미지 프레임 */}
+      <a
+        href={BOOK_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block mb-4 group"
+        title="교보문고에서 책 보기"
+      >
+        <div
+          className="relative overflow-hidden transition-transform duration-200 group-hover:scale-[1.03]"
+          style={{
+            width: 110,
+            height: 155,
+            borderRadius: 10,
+            border: "1px solid #e0e7ef",
+            boxShadow: "0 6px 24px rgba(0,0,0,0.13), 0 1.5px 4px rgba(0,0,0,0.08)",
+            background: "linear-gradient(135deg, #e8f0fe 0%, #f8faff 100%)",
+          }}
+        >
+          <img
+            src="/pdf-chatbot/book-cover.jpg"
+            alt="동유럽 여행 에세이 책 표지"
+            className="w-full h-full object-cover"
+            onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+          />
+          {/* 폴백: 이미지 없을 때 보이는 텍스트 */}
+          <div
+            className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center"
+            style={{ color: "#3b82f6" }}
+          >
+            <IconPlane />
+            <p className="text-[10px] font-bold mt-2 leading-tight text-gray-700">
+              동유럽<br />여행 에세이
+            </p>
+            <p className="text-[9px] text-gray-400 mt-1">교보문고 ebook</p>
+          </div>
+          {/* 책 광택 효과 */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background: "linear-gradient(120deg, rgba(255,255,255,0.18) 0%, transparent 60%)",
+            }}
+          />
+        </div>
+        <p className="text-[11px] text-blue-500 mt-2 font-medium group-hover:underline">
+          📖 교보문고에서 보기
+        </p>
+      </a>
+
+      {/* 3. 타이틀 */}
+      <div className="mb-4">
+        <h2 className="text-2xl font-extrabold tracking-tight text-gray-800 leading-tight">
           동유럽 여행, 뭐든 물어봐!
         </h2>
-        <p className="text-sm text-gray-400 mt-2 max-w-sm mx-auto leading-relaxed">
-          {hasPdf
-            ? "여행기와 최신 인터넷 정보를 바탕으로 동유럽 여행 질문에 답해드려요."
-            : "최신 인터넷 정보를 바탕으로 동유럽 여행 질문에 답해드려요."}
+        <p className="text-sm text-gray-400 mt-2 max-w-xs mx-auto leading-relaxed">
+          출간 작가의 생생한 동유럽 여행 에세이와<br />
+          최신 인터넷 정보를 바탕으로 답해드려요.
         </p>
       </div>
 
-      {/* 질문 카드 */}
+      {/* 4. 질문 카드 */}
       <div className="grid grid-cols-2 gap-3 w-full max-w-xl">
         {SUGGESTIONS.map(q => (
           <SuggestionChip key={q} label={q} onClick={() => onSuggest(q)} />
