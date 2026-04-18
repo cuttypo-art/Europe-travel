@@ -38,7 +38,6 @@ export default function Home() {
             <h1 className="text-base font-bold tracking-tight leading-none text-gray-800">
               동유럽 여행 챗봇
             </h1>
-            <p className="text-[11px] text-gray-400 mt-0.5">여행기 + 최신 인터넷 정보</p>
           </div>
         </button>
 
