@@ -217,6 +217,49 @@ function IconCastle() {
   );
 }
 
+/* ── 책 표지 프레임 ─────────────────────────────────────────────────── */
+function BookCoverFrame() {
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  return (
+    <div
+      className="relative overflow-hidden transition-transform duration-200 group-hover:scale-[1.03]"
+      style={{
+        width: 110,
+        height: 155,
+        borderRadius: 10,
+        border: "1px solid #e0e7ef",
+        boxShadow: "0 6px 24px rgba(0,0,0,0.13), 0 1.5px 4px rgba(0,0,0,0.08)",
+        background: "linear-gradient(135deg, #e8f0fe 0%, #f8faff 100%)",
+      }}
+    >
+      {!failed && (
+        <img
+          src="/pdf-chatbot/book-cover.png"
+          alt="동유럽 여행 에세이 책 표지"
+          className="w-full h-full object-cover"
+          onLoad={() => setLoaded(true)}
+          onError={() => setFailed(true)}
+        />
+      )}
+      {(!loaded || failed) && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center">
+          <IconPlane />
+          <p className="text-[10px] font-bold mt-2 leading-tight text-gray-700">
+            동유럽<br />여행 에세이
+          </p>
+          <p className="text-[9px] text-gray-400 mt-1">교보문고 ebook</p>
+        </div>
+      )}
+      {/* 광택 효과 */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{ background: "linear-gradient(120deg, rgba(255,255,255,0.15) 0%, transparent 55%)" }}
+      />
+    </div>
+  );
+}
+
 /* ── Welcome / Hero 섹션 ─────────────────────────────────────────────── */
 const BOOK_URL = "https://ebook-product.kyobobook.co.kr/dig/epd/ebook/E000012350958";
 
@@ -241,42 +284,7 @@ function WelcomeScreen({ onSuggest }: { hasPdf: boolean; onSuggest: (q: string) 
         className="block mb-4 group"
         title="교보문고에서 책 보기"
       >
-        <div
-          className="relative overflow-hidden transition-transform duration-200 group-hover:scale-[1.03]"
-          style={{
-            width: 110,
-            height: 155,
-            borderRadius: 10,
-            border: "1px solid #e0e7ef",
-            boxShadow: "0 6px 24px rgba(0,0,0,0.13), 0 1.5px 4px rgba(0,0,0,0.08)",
-            background: "linear-gradient(135deg, #e8f0fe 0%, #f8faff 100%)",
-          }}
-        >
-          <img
-            src="/pdf-chatbot/book-cover.jpg"
-            alt="동유럽 여행 에세이 책 표지"
-            className="w-full h-full object-cover"
-            onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-          />
-          {/* 폴백: 이미지 없을 때 보이는 텍스트 */}
-          <div
-            className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center"
-            style={{ color: "#3b82f6" }}
-          >
-            <IconPlane />
-            <p className="text-[10px] font-bold mt-2 leading-tight text-gray-700">
-              동유럽<br />여행 에세이
-            </p>
-            <p className="text-[9px] text-gray-400 mt-1">교보문고 ebook</p>
-          </div>
-          {/* 책 광택 효과 */}
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              background: "linear-gradient(120deg, rgba(255,255,255,0.18) 0%, transparent 60%)",
-            }}
-          />
-        </div>
+        <BookCoverFrame />
         <p className="text-[11px] text-blue-500 mt-2 font-medium group-hover:underline">
           📖 교보문고에서 보기
         </p>
