@@ -169,6 +169,42 @@ function isGoogleMapQuestion(q: string): boolean {
   return /구글\s*맵|구글\s*지도|google\s*map|길찾기|내비|나침반|스트리트뷰|위성\s*지도|장소\s*검색|즐겨찾기\s*저장|오프라인\s*지도/i.test(q);
 }
 
+// ── 구글맵 슬라이드 이미지 URL 반환 ─────────────────────────────────────────
+function pageUrl(n: number): string {
+  return `/api/gmap-slides/page-${String(n).padStart(3, "0")}.png`;
+}
+
+interface TopicImages { keywords: RegExp; pages: number[] }
+
+const GMAP_TOPIC_IMAGES: TopicImages[] = [
+  { keywords: /설치|다운로드|플레이\s*스토어|install/i,               pages: [3, 4, 5, 6] },
+  { keywords: /화면\s*구성|인터페이스|검색창|나침반|현재\s*위치|기본\s*화면/i, pages: [15, 16, 17, 18] },
+  { keywords: /지도\s*유형|위성|지형|3d|스트리트뷰/i,                 pages: [19, 20, 21, 22, 24, 26] },
+  { keywords: /맛집|음식점|레스토랑|카페|브런치/i,                     pages: [31, 32, 33, 34, 35] },
+  { keywords: /한식|한국\s*식당|한국\s*음식/i,                         pages: [36, 37, 38, 39, 40] },
+  { keywords: /리뷰|평점|후기|별점/i,                                  pages: [43, 44, 45] },
+  { keywords: /예약|reservation|booking/i,                            pages: [79, 80, 81, 82] },
+  { keywords: /길찾기|경로|내비|navigation|도보|대중교통|자전거/i,      pages: [48, 51, 52, 53, 55, 56] },
+  { keywords: /라이브\s*뷰|live\s*view|증강현실|ar/i,                  pages: [83, 84, 85, 86, 87, 88, 89] },
+  { keywords: /즐겨찾기|저장|목록|나만의\s*여행|travel\s*map/i,        pages: [93, 94, 95, 96] },
+  { keywords: /위치\s*공유|현재\s*위치\s*보내|동선/i,                  pages: [129, 130, 131, 132, 133, 134] },
+  { keywords: /지도\s*비교|citymapper|maps\.me/i,                      pages: [138] },
+];
+
+function getRelevantGmapImages(question: string, max = 4): string[] {
+  const matched: number[] = [];
+  for (const topic of GMAP_TOPIC_IMAGES) {
+    if (topic.keywords.test(question)) {
+      matched.push(...topic.pages);
+    }
+  }
+  // 중복 제거 후 최대 max개 반환
+  const unique = [...new Set(matched)].slice(0, max);
+  // 매칭 없으면 기본 인터페이스 이미지 보여주기
+  if (unique.length === 0) return [pageUrl(1), pageUrl(7), pageUrl(15)];
+  return unique.map(pageUrl);
+}
+
 // ── 두 VectorStore 통합 RAG 검색 ─────────────────────────────────────────────
 async function searchAllStores(question: string, queryEmbedding: number[]): Promise<{ context: string; sources: string[] }> {
   const results: Array<{ text: string; score: number; label: string }> = [];
@@ -274,7 +310,8 @@ router.post("/chat", async (req: Request, res: Response) => {
     });
 
     const answer = completion.choices[0].message.content ?? "";
-    res.json({ answer, sources, webResults });
+    const images = isGmapQ ? getRelevantGmapImages(question) : [];
+    res.json({ answer, sources, webResults, images });
   } catch (err: any) {
     res.status(500).json({ error: `Failed to generate answer: ${err.message}` });
   }

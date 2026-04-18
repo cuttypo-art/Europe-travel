@@ -37,6 +37,7 @@ type ChatMessage = {
   content: string;
   sources?: string[];
   webResults?: WebResult[];
+  images?: string[];
 };
 
 const SUGGESTIONS = [
@@ -80,6 +81,7 @@ export function ChatInterface() {
           content: response.answer,
           sources: response.sources,
           webResults: (response as any).webResults ?? [],
+          images: (response as any).images ?? [],
         },
       ]);
     } catch {
@@ -314,6 +316,25 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
         >
           {isUser ? msg.content : renderTextWithLinks(msg.content)}
         </div>
+
+        {!isUser && msg.images && msg.images.length > 0 && (
+          <div className="mt-3 ml-1">
+            <p className="text-[11px] text-gray-400 mb-1.5 flex items-center gap-1">
+              🗺️ 구글맵 가이드 슬라이드
+            </p>
+            <div className="flex flex-col gap-2">
+              {msg.images.map((src, i) => (
+                <img
+                  key={i}
+                  src={src}
+                  alt={`구글맵 가이드 슬라이드 ${i + 1}`}
+                  className="w-full rounded-xl border border-gray-100 shadow-sm"
+                  style={{ maxWidth: 480 }}
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
         {!isUser && (
           <div className="mt-2 space-y-1.5 ml-1">
