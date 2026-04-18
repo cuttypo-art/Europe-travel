@@ -1,16 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import { useChatWithPdf, useGetPdfStatus } from "@workspace/api-client-react";
-import { Send, User, Bot, Loader2, Globe, BookOpen, ExternalLink, MapPin } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Send, User, Bot, Loader2, Globe, BookOpen, ExternalLink } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 
-type WebResult = {
-  title: string;
-  url: string;
-  content: string;
-};
-
+type WebResult = { title: string; url: string; content: string };
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
@@ -41,18 +35,15 @@ export function ChatInterface() {
   const sendMessage = async (text: string) => {
     if (!text.trim() || chatMutation.isPending) return;
     setInput("");
-
     const newMessages: ChatMessage[] = [...messages, { role: "user", content: text.trim() }];
     setMessages(newMessages);
-
     try {
       const response = await chatMutation.mutateAsync({
         data: {
           question: text.trim(),
           history: messages.map(m => ({ role: m.role, content: m.content })),
-        }
+        },
       });
-
       setMessages([
         ...newMessages,
         {
@@ -60,66 +51,76 @@ export function ChatInterface() {
           content: response.answer,
           sources: response.sources,
           webResults: (response as any).webResults ?? [],
-        }
+        },
       ]);
     } catch {
       setMessages([
         ...newMessages,
-        { role: "assistant", content: "죄송해요, 답변 생성 중 오류가 발생했어요. 다시 시도해 주세요." }
+        { role: "assistant", content: "죄송해요, 오류가 발생했어요. 다시 시도해 주세요." },
       ]);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    sendMessage(input);
-  };
-
+  const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); sendMessage(input); };
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage(input);
-    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(input); }
   };
 
   return (
-    <div className="flex flex-col h-full bg-card rounded-2xl border shadow-sm overflow-hidden">
+    <div
+      className="flex flex-col h-full rounded-3xl overflow-hidden"
+      style={{
+        background: "rgba(255,255,255,0.6)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        border: "1px solid rgba(255,255,255,0.7)",
+        boxShadow: "0 8px 40px rgba(0,0,0,0.08)",
+      }}
+    >
       {/* 메시지 영역 */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-6">
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {messages.length === 0 ? (
-          <WelcomeScreen hasPdf={!!status?.indexed} onSuggest={setInput} />
+          <WelcomeScreen hasPdf={!!status?.indexed} onSuggest={q => { setInput(q); sendMessage(q); }} />
         ) : (
-          messages.map((msg, idx) => (
-            <MessageBubble key={idx} msg={msg} />
-          ))
+          messages.map((msg, idx) => <MessageBubble key={idx} msg={msg} />)
         )}
-
         {chatMutation.isPending && <TypingIndicator />}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* 입력창 */}
-      <div className="p-4 bg-card border-t">
-        <form onSubmit={handleSubmit} className="relative flex items-end gap-2">
+      {/* ── Pill 입력창 ── */}
+      <div
+        className="p-4"
+        style={{ borderTop: "1px solid rgba(0,0,0,0.06)", background: "rgba(255,255,255,0.5)" }}
+      >
+        <form
+          onSubmit={handleSubmit}
+          className="flex items-end gap-2 rounded-full px-4 py-2"
+          style={{
+            background: "rgba(255,255,255,0.9)",
+            border: "1px solid rgba(0,0,0,0.1)",
+            boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+          }}
+        >
           <Textarea
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="동유럽 여행에 대해 무엇이든 물어보세요..."
-            className="pr-12 min-h-[52px] max-h-[160px] py-3 resize-none rounded-xl bg-muted/50 border-transparent focus-visible:bg-background"
+            className="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0 resize-none min-h-[28px] max-h-[120px] py-1.5 text-sm placeholder:text-gray-400"
             rows={1}
             disabled={chatMutation.isPending}
           />
-          <Button
+          <button
             type="submit"
-            size="icon"
-            className="absolute right-2 bottom-2 h-8 w-8 rounded-lg transition-transform hover:scale-105"
             disabled={!input.trim() || chatMutation.isPending}
+            className="h-9 w-9 rounded-full flex items-center justify-center shrink-0 transition-all hover:scale-105 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed mb-0.5"
+            style={{ background: "linear-gradient(135deg, #3b82f6, #6366f1)" }}
           >
-            <Send className="h-4 w-4" />
-          </Button>
+            <Send className="h-4 w-4 text-white" />
+          </button>
         </form>
-        <p className="text-[11px] text-muted-foreground mt-2 text-center">
+        <p className="text-[11px] text-gray-400 mt-2 text-center">
           여행기 내용 + 최신 인터넷 정보를 함께 검색해서 답변드려요
         </p>
       </div>
@@ -127,81 +128,130 @@ export function ChatInterface() {
   );
 }
 
+/* ── Welcome / Hero 섹션 ─────────────────────────────────────────────── */
 function WelcomeScreen({ hasPdf, onSuggest }: { hasPdf: boolean; onSuggest: (q: string) => void }) {
   return (
-    <div className="h-full flex flex-col items-center justify-center py-8 text-center space-y-6">
-      <div className="bg-primary/5 p-5 rounded-full">
-        <MapPin className="h-10 w-10 text-primary" />
+    <div className="flex flex-col items-center justify-center py-6 text-center space-y-7">
+      {/* 동유럽 감성 일러스트 이모지 */}
+      <div className="space-y-1">
+        <div className="text-5xl leading-tight select-none">🏰🌉✈️</div>
+        <div className="text-3xl leading-tight select-none">🥐☕🗺️</div>
       </div>
+
+      {/* 타이틀 */}
       <div>
-        <h2 className="text-xl font-bold mb-1">안녕하세요! 동유럽 여행 챗봇이에요 ✈️</h2>
-        <p className="text-sm text-muted-foreground max-w-md">
+        <h2 className="text-3xl font-extrabold tracking-tight text-gray-800 leading-tight">
+          동유럽 여행, 뭐든 물어봐!
+        </h2>
+        <p className="text-sm text-gray-400 mt-2 max-w-sm mx-auto leading-relaxed">
           {hasPdf
             ? "여행기와 최신 인터넷 정보를 바탕으로 동유럽 여행 질문에 답해드려요."
             : "최신 인터넷 정보를 바탕으로 동유럽 여행 질문에 답해드려요."}
         </p>
       </div>
-      <div className="grid grid-cols-2 gap-2 w-full max-w-lg">
+
+      {/* 질문 카드 */}
+      <div className="grid grid-cols-2 gap-3 w-full max-w-xl">
         {SUGGESTIONS.map(q => (
-          <button
-            key={q}
-            onClick={() => onSuggest(q)}
-            className="text-left text-sm bg-secondary hover:bg-secondary/70 text-secondary-foreground px-4 py-3 rounded-xl transition-colors border border-border"
-          >
-            {q}
-          </button>
+          <SuggestionChip key={q} label={q} onClick={() => onSuggest(q)} />
         ))}
       </div>
     </div>
   );
 }
 
+function SuggestionChip({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="group text-left text-sm text-gray-700 font-medium px-4 py-3.5 rounded-2xl transition-all duration-200 ease-out"
+      style={{
+        background: "rgba(255,255,255,0.85)",
+        border: "1px solid rgba(0,0,0,0.07)",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+      }}
+      onMouseEnter={e => {
+        const el = e.currentTarget;
+        el.style.transform = "translateY(-3px)";
+        el.style.boxShadow = "0 8px 20px rgba(59,130,246,0.15)";
+        el.style.background = "rgba(255,255,255,1)";
+        el.style.borderColor = "rgba(59,130,246,0.3)";
+      }}
+      onMouseLeave={e => {
+        const el = e.currentTarget;
+        el.style.transform = "translateY(0)";
+        el.style.boxShadow = "0 2px 8px rgba(0,0,0,0.06)";
+        el.style.background = "rgba(255,255,255,0.85)";
+        el.style.borderColor = "rgba(0,0,0,0.07)";
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+/* ── 메시지 버블 ─────────────────────────────────────────────────────── */
 function MessageBubble({ msg }: { msg: ChatMessage }) {
   const isUser = msg.role === "user";
   return (
     <div className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
       {!isUser && (
-        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
-          <Bot className="h-4 w-4 text-primary" />
+        <div
+          className="h-8 w-8 rounded-full flex items-center justify-center shrink-0 mt-1"
+          style={{ background: "linear-gradient(135deg, #3b82f6, #6366f1)" }}
+        >
+          <Bot className="h-4 w-4 text-white" />
         </div>
       )}
 
       <div className={`max-w-[78%] ${isUser ? "order-1" : "order-2"}`}>
-        <div className={`p-4 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
-          isUser
-            ? "bg-primary text-primary-foreground rounded-tr-sm"
-            : "bg-muted text-foreground rounded-tl-sm"
-        }`}>
+        <div
+          className="p-4 text-sm leading-relaxed whitespace-pre-wrap"
+          style={
+            isUser
+              ? {
+                  background: "linear-gradient(135deg, #3b82f6, #6366f1)",
+                  color: "white",
+                  borderRadius: "20px 20px 4px 20px",
+                  boxShadow: "0 4px 14px rgba(99,102,241,0.25)",
+                }
+              : {
+                  background: "rgba(255,255,255,0.85)",
+                  color: "#1f2937",
+                  borderRadius: "20px 20px 20px 4px",
+                  border: "1px solid rgba(0,0,0,0.07)",
+                  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+                }
+          }
+        >
           {msg.content}
         </div>
 
         {!isUser && (
-          <div className="mt-2 space-y-2">
-            {/* 출처 배지 */}
+          <div className="mt-2 space-y-1.5 ml-1">
             <div className="flex gap-1 flex-wrap">
               {msg.sources && msg.sources.length > 0 && (
-                <Badge variant="secondary" className="text-xs gap-1">
-                  <BookOpen className="h-3 w-3" /> 여행기 참고
+                <Badge variant="secondary" className="text-[11px] gap-1 h-5">
+                  <BookOpen className="h-2.5 w-2.5" /> 여행기 참고
                 </Badge>
               )}
               {msg.webResults && msg.webResults.length > 0 && (
-                <Badge variant="secondary" className="text-xs gap-1 text-blue-600">
-                  <Globe className="h-3 w-3" /> 웹 검색 {msg.webResults.length}건
+                <Badge className="text-[11px] gap-1 h-5 bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-50">
+                  <Globe className="h-2.5 w-2.5" /> 웹 검색 {msg.webResults.length}건
                 </Badge>
               )}
             </div>
 
-            {/* 여행기 출처 */}
             {msg.sources && msg.sources.length > 0 && (
               <details className="group">
-                <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground list-none flex items-center gap-1">
+                <summary className="text-[11px] text-gray-400 cursor-pointer hover:text-gray-600 list-none flex items-center gap-1">
                   <span className="group-open:hidden">▶</span>
                   <span className="hidden group-open:inline">▼</span>
                   📖 여행기 출처 보기
                 </summary>
                 <div className="mt-1 space-y-1">
                   {msg.sources.map((s, i) => (
-                    <div key={i} className="text-xs bg-secondary/60 p-2 rounded-lg border text-muted-foreground line-clamp-3">
+                    <div key={i} className="text-[11px] bg-gray-50 p-2 rounded-xl border text-gray-500 line-clamp-3">
                       "{s.trim()}"
                     </div>
                   ))}
@@ -209,10 +259,9 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
               </details>
             )}
 
-            {/* 웹 검색 결과 */}
             {msg.webResults && msg.webResults.length > 0 && (
               <details className="group">
-                <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground list-none flex items-center gap-1">
+                <summary className="text-[11px] text-gray-400 cursor-pointer hover:text-gray-600 list-none flex items-center gap-1">
                   <span className="group-open:hidden">▶</span>
                   <span className="hidden group-open:inline">▼</span>
                   🌐 웹 검색 결과 보기
@@ -224,13 +273,14 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
                       href={r.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="block text-xs bg-blue-50 dark:bg-blue-950/30 p-2.5 rounded-lg border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition-colors"
+                      className="block text-[11px] p-2.5 rounded-xl border hover:bg-blue-50 transition-colors"
+                      style={{ background: "rgba(239,246,255,0.7)", borderColor: "rgba(191,219,254,0.6)" }}
                     >
-                      <div className="flex items-center gap-1 font-medium text-blue-700 dark:text-blue-300 mb-0.5">
+                      <div className="flex items-center gap-1 font-medium text-blue-600 mb-0.5">
                         <ExternalLink className="h-3 w-3 shrink-0" />
                         <span className="line-clamp-1">{r.title}</span>
                       </div>
-                      <p className="text-muted-foreground line-clamp-2">{r.content}</p>
+                      <p className="text-gray-500 line-clamp-2">{r.content}</p>
                     </a>
                   ))}
                 </div>
@@ -241,24 +291,39 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
       </div>
 
       {isUser && (
-        <div className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center shrink-0 order-2 mt-1">
-          <User className="h-4 w-4" />
+        <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center shrink-0 order-2 mt-1">
+          <User className="h-4 w-4 text-gray-500" />
         </div>
       )}
     </div>
   );
 }
 
+/* ── 타이핑 인디케이터 ────────────────────────────────────────────────── */
 function TypingIndicator() {
   return (
     <div className="flex gap-3 justify-start">
-      <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-        <Loader2 className="h-4 w-4 text-primary animate-spin" />
+      <div
+        className="h-8 w-8 rounded-full flex items-center justify-center shrink-0"
+        style={{ background: "linear-gradient(135deg, #3b82f6, #6366f1)" }}
+      >
+        <Loader2 className="h-4 w-4 text-white animate-spin" />
       </div>
-      <div className="bg-muted p-4 rounded-2xl rounded-tl-sm flex items-center gap-1.5">
-        <span className="text-xs text-muted-foreground mr-1">검색 중...</span>
+      <div
+        className="px-5 py-3.5 flex items-center gap-1.5"
+        style={{
+          background: "rgba(255,255,255,0.85)",
+          borderRadius: "20px 20px 20px 4px",
+          border: "1px solid rgba(0,0,0,0.07)",
+        }}
+      >
+        <span className="text-xs text-gray-400 mr-1">검색 중</span>
         {[0, 150, 300].map(d => (
-          <span key={d} className="h-1.5 w-1.5 bg-foreground/40 rounded-full animate-bounce" style={{ animationDelay: `${d}ms` }} />
+          <span
+            key={d}
+            className="h-1.5 w-1.5 rounded-full bg-blue-400 animate-bounce"
+            style={{ animationDelay: `${d}ms` }}
+          />
         ))}
       </div>
     </div>

@@ -1,54 +1,96 @@
 import { useState } from "react";
 import { ChatInterface } from "@/components/ChatInterface";
 import { useGetPdfStatus } from "@workspace/api-client-react";
-import { BookOpen, Globe, RotateCcw } from "lucide-react";
+import { BookOpen, Globe, RotateCcw, Plane } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function Home() {
   const { data: status } = useGetPdfStatus();
   const [chatKey, setChatKey] = useState(0);
-
   const goHome = () => setChatKey(k => k + 1);
 
   return (
-    <div className="min-h-[100dvh] bg-background text-foreground flex flex-col font-sans">
-      {/* 헤더 */}
-      <header className="border-b bg-card px-6 py-3 flex items-center justify-between sticky top-0 z-20 shadow-sm">
-        {/* 로고 — 클릭하면 홈으로 */}
+    <div
+      className="min-h-[100dvh] text-foreground flex flex-col font-sans"
+      style={{
+        background: "linear-gradient(135deg, #e8f4fd 0%, #fef9f0 50%, #f0f4ff 100%)",
+      }}
+    >
+      {/* ── Glassmorphism 헤더 ── */}
+      <header
+        className="px-6 py-3 flex items-center justify-between sticky top-0 z-20"
+        style={{
+          background: "rgba(255,255,255,0.55)",
+          backdropFilter: "blur(18px)",
+          WebkitBackdropFilter: "blur(18px)",
+          borderBottom: "1px solid rgba(255,255,255,0.4)",
+          boxShadow: "0 2px 20px rgba(0,0,0,0.06)",
+        }}
+      >
+        {/* 로고 */}
         <button
           onClick={goHome}
-          className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+          className="flex items-center gap-3 hover:opacity-75 transition-opacity"
         >
-          <div className="h-9 w-9 bg-primary rounded-xl flex items-center justify-center text-xl">
-            ✈️
+          <div
+            className="h-9 w-9 rounded-xl flex items-center justify-center"
+            style={{ background: "linear-gradient(135deg, #3b82f6, #6366f1)" }}
+          >
+            <Plane className="h-5 w-5 text-white" strokeWidth={1.8} />
           </div>
           <div className="text-left">
-            <h1 className="text-lg font-bold tracking-tight leading-none">동유럽 여행 챗봇</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">여행기 + 최신 인터넷 정보 기반 답변</p>
+            <h1 className="text-base font-bold tracking-tight leading-none text-gray-800">
+              동유럽 여행 챗봇
+            </h1>
+            <p className="text-[11px] text-gray-400 mt-0.5">여행기 + 최신 인터넷 정보</p>
           </div>
         </button>
 
-        <div className="flex items-center gap-3">
-          {/* 상태 배지 */}
-          <div className="hidden sm:flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <BookOpen className="h-3.5 w-3.5" />
-              {status?.indexed
-                ? <span className="text-green-600 font-medium">여행기 로딩됨</span>
-                : <span className="text-amber-500">여행기 준비 중</span>}
+        <div className="flex items-center gap-2">
+          {/* 상태 인디케이터 배지 */}
+          <div className="hidden sm:flex items-center gap-1.5">
+            <span
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium"
+              style={{
+                background: status?.indexed
+                  ? "rgba(22,163,74,0.1)"
+                  : "rgba(245,158,11,0.1)",
+                color: status?.indexed ? "#15803d" : "#b45309",
+                border: `1px solid ${status?.indexed ? "rgba(22,163,74,0.2)" : "rgba(245,158,11,0.2)"}`,
+              }}
+            >
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: status?.indexed ? "#22c55e" : "#f59e0b" }}
+              />
+              <BookOpen className="h-3 w-3" />
+              {status?.indexed ? "여행기 로딩됨" : "여행기 준비 중"}
             </span>
-            <span className="flex items-center gap-1">
-              <Globe className="h-3.5 w-3.5 text-blue-500" />
-              <span className="text-blue-600 font-medium">인터넷 검색 켜짐</span>
+
+            <span
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium"
+              style={{
+                background: "rgba(59,130,246,0.1)",
+                color: "#1d4ed8",
+                border: "1px solid rgba(59,130,246,0.2)",
+              }}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-blue-400 animate-pulse" />
+              <Globe className="h-3 w-3" />
+              검색 활성
             </span>
           </div>
 
-          {/* 홈(새 대화) 버튼 */}
+          {/* 새 대화 버튼 */}
           <Button
             variant="outline"
             size="sm"
             onClick={goHome}
-            className="flex items-center gap-1.5 text-xs"
+            className="flex items-center gap-1.5 text-xs rounded-full h-8 px-3"
+            style={{
+              background: "rgba(255,255,255,0.7)",
+              border: "1px solid rgba(0,0,0,0.1)",
+            }}
           >
             <RotateCcw className="h-3.5 w-3.5" />
             새 대화
@@ -56,8 +98,8 @@ export default function Home() {
         </div>
       </header>
 
-      {/* 채팅 메인 영역 — key가 바뀌면 완전히 리셋 */}
-      <main className="flex-1 flex flex-col max-w-4xl w-full mx-auto px-4 py-6 h-[calc(100dvh-65px)]">
+      {/* 채팅 메인 */}
+      <main className="flex-1 flex flex-col max-w-3xl w-full mx-auto px-4 py-6 h-[calc(100dvh-57px)]">
         <ChatInterface key={chatKey} />
       </main>
     </div>
